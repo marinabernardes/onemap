@@ -15,47 +15,37 @@
 
 ##'Converts probabilities to onemap format
 ##'
-##'@param input.obj object of class onemap or onemap sequence
-##'@param global_error single value to be considered as error probability in HMM emission function
-##'@param genotypes_errors matrix individuals x markers with error values for each marker
-##'@param genotypes_probs table containing the probability distribution for each combination of marker × individual. 
-##'Each line on this table represents the combination of one marker with one individual, and the respective probabilities.
-##'The table should contain four three columns (prob(AA), prob(AB) and prob(BB)) and individuals x markers rows.
+##'@param onemap.obj define
+##'@param global_error define
+##'@param genotypes_errors define
+##'@param genotypes_probs define
 ##'
 ##'@importFrom reshape2 melt
 ##'
 ##'@export
-create_probs <- function(input.obj = NULL, 
+create_probs <- function(onemap.obj = NULL, 
                          global_error = NULL, 
                          genotypes_errors = NULL, 
                          genotypes_probs = NULL){
   
-  if(!(is(input.obj,"onemap") | is(input.obj,"sequence"))){
-    stop("input.obj should be of class onemap or sequence")
-  }
-  
-  if(is(input.obj, "sequence")) {
-    seq.obj <- input.obj
-    input.obj <- input.obj$data.name
-    flag <- TRUE
-  } else {
-    flag <- FALSE
+  if(class(onemap.obj)[1]!="onemap"){
+    stop("onemap.obj should be of class onemap")
   }
   
   # Empty object
-  if(input.obj$n.mar == 0){
+  if(onemap.obj$n.mar == 0){
     warning("It is a empty onemap object. Nothing will be done.")
-    return(input.obj)
+    return(onemap.obj)
   }
   
   if(all(is.null(c(global_error, genotypes_errors, genotypes_probs)))){
     global_error <- 10^-5
   }
   
-  crosstype <- class(input.obj)[2]
+  crosstype <- class(onemap.obj)[2]
   
-  probs <- melt(t(input.obj$geno))
-  probs$type <- rep(input.obj$segr.type.num, input.obj$n.ind)
+  probs <- melt(t(onemap.obj$geno))
+  probs$type <- rep(onemap.obj$segr.type.num, onemap.obj$n.ind)
   
   if(!is.null(global_error) | !is.null(genotypes_errors)){
     
@@ -63,19 +53,19 @@ create_probs <- function(input.obj = NULL,
       error <- rep(global_error, length(probs$value))
     } else {
       # checks
-      if(!all(colnames(input.obj$geno)%in%colnames(genotypes_errors))){
+      if(!all(colnames(onemap.obj$geno)%in%colnames(genotypes_errors))){
         stop("Not all markers in onemap object have corresponding genotype errors in matrix")
       }
       
-      if(!all(colnames(genotypes_errors)%in%colnames(input.obj$geno))){
+      if(!all(colnames(genotypes_errors)%in%colnames(onemap.obj$geno))){
         stop("There are more markers in errors matrix than in onemap object")
       }
       
-      if(!all(rownames(input.obj$geno)%in%rownames(genotypes_errors))){
+      if(!all(rownames(onemap.obj$geno)%in%rownames(genotypes_errors))){
         stop("Not all individuals in onemap object have corresponding genotype errors in matrix")
       }
       
-      if(!all(rownames(input.obj$geno)%in%rownames(genotypes_errors))){
+      if(!all(rownames(onemap.obj$geno)%in%rownames(genotypes_errors))){
         stop("There are more individuals in errors matrix than in onemap object")
       }
       
@@ -188,7 +178,14 @@ create_probs <- function(input.obj = NULL,
       
       # The homozygotes can be inverted in heterozygotes genotypes
       hom1.idx <- which(probs$value == 1)
-      for_het <- table(apply(genotypes_probs[hom1.idx,-2],1, which.max)) 
+      # If it has only one marker the apply breaks
+      if(length(hom1.idx) > 1){
+        sub <- genotypes_probs[hom1.idx,-2]
+      } else {
+        sub <- t(as.matrix(genotypes_probs[hom1.idx,-2]))
+      }
+      
+      for_het <- table(apply(sub,1, which.max)) 
       for_het <- as.numeric(which.max(for_het))
       
       if(for_het == 2){
@@ -201,18 +198,24 @@ create_probs <- function(input.obj = NULL,
       
       # We consider that the genotype number is correct and the probability need to be the max at the genotype column
       # We change the position of the wrong probabilities
-      hom1.idx.prob <- which(apply(genotypes_probs[hom1.idx,-2],1, which.max) == 1)
+      hom1.idx.prob <- which(apply(sub,1, which.max) == 1)
       prob.temp[hom1.idx[hom1.idx.prob],1] <- genotypes_probs[hom1.idx[hom1.idx.prob], 1]
       prob.temp[hom1.idx[hom1.idx.prob],3] <- genotypes_probs[hom1.idx[hom1.idx.prob], 3]
-      hom1.idx.prob <- which(apply(genotypes_probs[hom1.idx,-2],1, which.max) == 2)
+      hom1.idx.prob <- which(apply(sub,1, which.max) == 2)
       prob.temp[hom1.idx[hom1.idx.prob],1] <- genotypes_probs[hom1.idx[hom1.idx.prob], 3]
       prob.temp[hom1.idx[hom1.idx.prob],3] <- genotypes_probs[hom1.idx[hom1.idx.prob], 1]
       
       hom3.idx <- which(probs$value == 3)
-      hom3.idx.prob <- which(apply(genotypes_probs[hom3.idx,-2],1, which.max) == 1)
+      if(length(hom3.idx) > 1){
+        sub <- genotypes_probs[hom3.idx,-2]
+      } else {
+        sub <- t(as.matrix(genotypes_probs[hom3.idx,-2]))
+      }
+      
+      hom3.idx.prob <- which(apply(sub,1, which.max) == 1)
       prob.temp[hom3.idx[hom3.idx.prob],3] <- genotypes_probs[hom3.idx[hom3.idx.prob], 1]
       prob.temp[hom3.idx[hom3.idx.prob],1] <- genotypes_probs[hom3.idx[hom3.idx.prob], 3]
-      hom3.idx.prob <- which(apply(genotypes_probs[hom3.idx,-2],1, which.max) == 2)
+      hom3.idx.prob <- which(apply(sub,1, which.max) == 2)
       prob.temp[hom3.idx[hom3.idx.prob],3] <- genotypes_probs[hom3.idx[hom3.idx.prob], 3]
       prob.temp[hom3.idx[hom3.idx.prob],1] <- genotypes_probs[hom3.idx[hom3.idx.prob], 1]
       
@@ -241,6 +244,13 @@ create_probs <- function(input.obj = NULL,
       het.idx <- which(probs$value == 2)
       
       hom1.idx <- which(probs$value == 1)
+      # If it has only one marker the apply breaks
+      if(length(hom1.idx) > 1){
+        sub <- genotypes_probs[hom1.idx,-2]
+      } else {
+        sub <- t(as.matrix(genotypes_probs[hom1.idx,-2]))
+      }
+      
       hom1.idx.prob <- unique(apply(genotypes_probs[hom1.idx,],1, which.max))
       prob.temp[hom1.idx,1] <- genotypes_probs[hom1.idx, hom1.idx.prob]
       if(hom1.idx.prob == 3){
@@ -254,6 +264,13 @@ create_probs <- function(input.obj = NULL,
       }
       
       hom3.idx <- which(probs$value == 3)
+      # If it has only one marker the apply breaks
+      if(length(hom3.idx) > 1){
+        sub <- genotypes_probs[hom3.idx,-2]
+      } else {
+        sub <- t(as.matrix(genotypes_probs[hom3.idx,-2]))
+      }
+      
       hom3.idx.prob <- unique(apply(genotypes_probs[hom3.idx,],1, which.max))
       prob.temp[hom3.idx,3] <- genotypes_probs[hom3.idx, hom3.idx.prob]
       if(hom3.idx.prob == 3){
@@ -285,21 +302,11 @@ create_probs <- function(input.obj = NULL,
     }
     
     # The values of estimated genotypes must sum 1
-    
-    
   }
   
   rownames(prob) <- paste0(probs$Var1, "_", probs$Var2)
   
-  input.obj$error <- prob
+  onemap.obj$error <- prob
   
-  if(flag) {
-    seq.obj$data.name <- input.obj
-    seq.obj$twopt$data.name <- input.obj
-    input.obj <- seq.obj
-  }
-  
-  return(input.obj)
+  return(onemap.obj)
 }
-
-
